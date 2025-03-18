@@ -13,10 +13,8 @@ HEDCO <- read_excel("data/Depression_HEDCO.xlsx", sheet = 2)
 
 world_data <- readRDS("data/world_data.rds")
 
-# Ensure "grade_group" is character type
 HEDCO$grade_group <- as.character(HEDCO$grade_group)
 
-# Split "grade_group" at commas, expand into multiple rows
 library(tidyr)
 library(dplyr)
 
@@ -71,17 +69,13 @@ depress <- combined_summary %>%
   filter(gender == "Both")
 
 
-# Define server logic required to draw a histogram
 function(input, output, session) {
 
   
-  # 1) Store the selected country from map clicks
   selected_country <- reactiveVal(NULL)
   
-  # 2) Leaflet Map
   output$map <- renderLeaflet({
     
-    # Filter HEDCO data based on selected school type, study year group, and grade level
     filtered_countries <- HEDCO %>%
       filter(
         # School Type filter
@@ -99,14 +93,12 @@ function(input, output, session) {
         )%>%
       pull(country)
     
-    # Update 'world' data with filtered availability
     world_filtered <- world %>%
       mutate(data_available = ifelse(name %in% filtered_countries, "Yes", "No"))
     
-    # Color palette
+    # Colors
     pal <- colorFactor(c("#D8DCDA", "#007030"), domain = c("Yes", "No"))
     
-    # Build Leaflet map with disabled zoom and panning
     leaflet(world_filtered,
             options = leafletOptions(scrollWheelZoom = FALSE)) %>%
       setView(lng = 0, lat = 20, zoom = 2) %>%
@@ -124,12 +116,10 @@ function(input, output, session) {
       addLegend(pal = pal, position = "bottomleft", values = ~data_available, title = "Data Availabile for Selected Filters")
   })
   
-  # 3) Handle Map Clicks to select a country
   observeEvent(input$map_shape_click, {
     selected_country(input$map_shape_click$id)
   })
   
-  # 4) Dynamic Depression Circle
   output$depression_circle <- renderUI({
     country <- selected_country()
     
@@ -151,7 +141,6 @@ function(input, output, session) {
     )
   })
   
-  # 5) Depression Text
   output$depression_text <- renderUI({
     country <- selected_country()
     text <- if (!is.null(country)) {
@@ -166,7 +155,6 @@ function(input, output, session) {
   output$school_text <- renderUI({
     country <- selected_country()  # Get selected country
     
-    # Apply all filters to `HEDCO`
     filtered_schools <- HEDCO %>%
       filter(
         
@@ -179,7 +167,8 @@ function(input, output, session) {
         
         # Intervention length
         (length(input$sim_length) == 0 || "All" %in% input$sim_length) | (sim_length %in% input$sim_length),
-      
+        
+        # Grade grouping filters
     (length(input$grade_group) == 0 || "All" %in% input$grade_group) |
       (sapply(HEDCO$grade_group, function(x) any(input$grade_group %in% unlist(strsplit(x, ", ")) )))
       )
@@ -194,14 +183,13 @@ function(input, output, session) {
       ))
     }
     
-    # Now, filter for the selected country
     country_schools <- filtered_schools %>%
       filter(country == !!country)
     
-    # Sum the total number of schools, ignoring -999 values
+    # ignoring -999 values
     total_schools <- sum(country_schools$number_schools[country_schools$number_schools != -999], na.rm = TRUE)
-    
-    # If total_schools is 0, display "Not Reported"
+
+#when no schools display        
     if (total_schools == 0) {
       return(tags$p(
         paste("There are no schools in", country, "from this dataset, or no data is available for your filter selection."),
@@ -209,24 +197,21 @@ function(input, output, session) {
       ))
     }
     
-    # Otherwise, display the total number of schools
+#displaying # of schools
     tags$p(
       paste("Total number of schools in", country, "from this dataset:", total_schools),
       style = "text-align: center; font-size: 16px"
     )
   })
   
-  
-
-  # 6) Study List Output with Clickable Studies
   output$study_list <- renderUI({  
-    country <- selected_country()  # Get selected country
+    country <- selected_country()  # Get country
     
     if (is.null(country)) {
       return(tags$p("Select a country to see study details.", style = "text-align: left; font-size: 16px;"))
     }
     
-    # Apply filters to dataset for the selected country
+    # Apply filters to dataset for the country
     filtered_studies <- HEDCO %>%
       filter(
         country == !!country,  
@@ -245,7 +230,7 @@ function(input, output, session) {
     
     filtered_studies <- sort(filtered_studies)
     
-    # Create study list with clickable buttons
+    # study list with clickable buttons
     tags$div(
       tags$h4(paste("Studies from your selection in", country), style = "margin-bottom: 10px;"),
       style = "display: flex; flex-direction: column; gap: 10px;",
@@ -264,12 +249,10 @@ function(input, output, session) {
     )
   })
 
-  # Observe study button clicks and show modal pop-up
   observe({
     req(selected_country())  
     
     removeModal() 
-    # Filter the dataset based on the selected country
     filtered_studies <- HEDCO %>%
       filter(
         country == selected_country(),  
@@ -288,19 +271,16 @@ function(input, output, session) {
       study_id <- paste0("study_", i)
       
       observeEvent(input[[study_id]], {
-        study_details <- filtered_studies[i, ]  # Now correctly referencing filtered studies
-        
-        # Ensure there's a valid study link; otherwise, show plain text
+        study_details <- filtered_studies[i, ] 
+
         study_link <- if (!is.na(study_details$article_link) && study_details$article_link != "") {
           tags$a(href = study_details$article_link, target = "_blank", rel = "noopener noreferrer", study_details$study_author_year)
         } else {
           study_details$study_author_year
         }
         
-        # Ensure there's a valid intervention link; otherwise, show plain text
         intervention_name <- study_details$Intervention  
         
-        # Handle "Not available" in `intervention_link`
         if (!is.na(study_details$inter_link) && study_details$inter_link != "" && study_details$inter_link != "Not Available") {
           intervention_display <- tags$p(
             tags$b("Intervention: "), 
@@ -309,7 +289,7 @@ function(input, output, session) {
         } else {
           intervention_display <- tags$p(
             tags$b("Intervention: "), intervention_name,
-            tags$span("(Link to intervention unavailable)")  # Show message if link is "Not available"
+            tags$span("(Link to intervention unavailable)") 
           )
         }
         
@@ -399,7 +379,6 @@ function(input, output, session) {
             "*SMD is a way to measure how big or small the difference is between two groups in a study. 
   In this data, a negative SMD means the participants who received the intervention had fewer depression symptoms."
           ),
-            # Display intervention with hyperlink
           easyClose = TRUE,
           footer = modalButton("Close")
         ))
@@ -414,24 +393,21 @@ function(input, output, session) {
   
   
   # 7) Reset Filters Button
-  default_study_year <- c("Before 2000", "2001-2010", "2011-2015", "After 2015")          # Set your default years
+  default_study_year <- c("Before 2000", "2001-2010", "2011-2015", "After 2015")          
   default_inter_admin <- "All"  # Set default intervention admin
   default_sim_length <- "All"
   default_grade <- "All"
   
   # Reset Filters Button
-  # 1) Fix Country Selection on Map Clicks
   observeEvent(input$map_shape_click, {
     req(input$map_shape_click$id)  # Ensures a valid click
-    selected_country(NULL)  # Temporarily clear selection to force reactivity
+    selected_country(NULL) 
     selected_country(input$map_shape_click$id)  # Update country selection
   })
   
-  # 2) Fix Reset Filters Behavior
   observeEvent(input$reset_filters, {
     selected_country(NULL)  # Reset country selection properly
     
-    # Reset all filter inputs to their original values
     updateCheckboxGroupInput(session, "study_year_group", selected = default_study_year)
     updateCheckboxGroupInput(session, "inter_admin", selected = default_inter_admin)
     updateCheckboxGroupInput(session, "sim_length", selected = default_sim_length)
